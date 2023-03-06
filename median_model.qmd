@@ -1,0 +1,207 @@
+---
+title: "median_model"
+format: html
+editor: visual
+---
+
+## load libraries
+
+```{r libraries}
+library(data.table)
+library(ggplot2)
+library(dplyr)
+```
+
+## path to files
+
+```{r path-to-files}
+# path_files <- "X:/PublicData/QC/HF/2022/02/txt/"
+path_files <- "X:/PublicData/QC/temporary_all_HF/QC_comb_txt_results/"
+```
+
+
+## load files
+
+```{r files}
+summary <-
+  data.table::fread(input = paste0(path_files, "summary.txt")) %>% 
+  tibble::as_tibble(.name_repair = janitor::make_clean_names) %>% 
+  dplyr::select(
+    raw_file,
+    ms_ms,
+    ms_ms_submitted,
+    ms_ms_identified,
+    ms_ms_identified_percent,
+    peptide_sequences_identified,
+    peaks_sequenced_percent,
+    peaks_repeatedly_sequenced_percent
+  ) %>% 
+  dplyr::filter(!raw_file == "Total")
+
+evidence <-
+  data.table::fread(input = paste0(path_files, "evidence.txt")) %>%
+  tibble::as_tibble(.name_repair = janitor::make_clean_names) %>% 
+  dplyr::filter(!reverse == "+" & !potential_contaminant == "+") %>%
+  dplyr::select(
+    raw_file,
+    experiment,
+    charge,
+    m_z,
+    mass,
+    score,
+    uncalibrated_calibrated_m_z_ppm,
+    mass_error_ppm,
+    uncalibrated_mass_error_ppm,
+    max_intensity_m_z_0,
+    retention_time,
+    retention_length,
+    number_of_data_points,
+    number_of_scans,
+    ms_ms_count,
+    intensity
+  ) 
+
+protein_groups <-
+  data.table::fread(input = paste0(path_files, "proteinGroups.txt")) %>%
+  tibble::as_tibble(.name_repair = janitor::make_clean_names) %>%
+  dplyr::filter(!reverse == "+" & !potential_contaminant == "+" & !only_identified_by_site == "+") %>% 
+  dplyr::select(starts_with("peptides_"))
+
+# all_peptides <-
+#   data.table::fread(input = paste0(path_files, "allPeptides.txt")) %>%
+#   tibble::as_tibble(.name_repair = janitor::make_clean_names) %>%
+#   dplyr::select(
+#     raw_file,
+#     mass_precision_ppm,
+#     retention_time,
+#     retention_length,
+#     retention_length_fwhm
+#     # score
+#     # msms_isotope_indices
+#   )
+
+ms_scan <-
+  data.table::fread(input = paste0(path_files, "msScans.txt")) %>%
+  tibble::as_tibble(.name_repair = janitor::make_clean_names) %>% 
+  dplyr::select(
+    raw_file,
+    retention_time,
+    cycle_time,
+    ion_injection_time,
+    total_ion_current,
+    base_peak_intensity,
+    peak_length,
+    identified_multiplets_s,
+    ms_ms_s,
+    identified_ms_ms_s,
+    ms_ms_identification_rate_percent,
+    intens_comp_factor,
+    ctcd_comp,
+    raw_ov_ft_t,
+    agc_fill
+  ) 
+
+msms_scan <-
+  data.table::fread(input = paste0(path_files, "msmsScans.txt")) %>% 
+  tibble::as_tibble(.name_repair = janitor::make_clean_names) %>%
+  dplyr::select(
+    raw_file,
+    retention_time,
+    ion_injection_time,
+    total_ion_current,
+    collision_energy,
+    base_peak_intensity,
+    elapsed_time,
+    identified,
+    precursor_intensity,
+    score
+  ) 
+
+# msms <-
+#   data.table::fread(input = paste0(path_files, "msms.txt")) %>%
+#   tibble::as_tibble(.name_repair = janitor::make_clean_names) %>% 
+#   dplyr::select(
+#     raw_file, 
+#     isotope_index,
+#     mass_error_ppm,
+#     simple_mass_error_ppm,
+#     precursor_intensity,
+#     retention_time,
+#     score,
+#     mass_deviations_ppm,
+#     number_of_matches,
+#     intensity_coverage,
+#     peak_coverage
+#   )
+```
+
+## calculate median form data
+
+```{r calculate-median}
+
+evidence_median <- 
+  evidence %>% 
+  dplyr::select(-c(charge, retention_time, number_of_data_points, number_of_scans, ms_ms_count)) %>% 
+  dplyr::group_by(raw_file, experiment) %>% 
+  dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "evidence__{.col}")) %>% 
+  dplyr::ungroup()
+
+# all_peptides_median <- 
+#   all_peptides %>% 
+#   dplyr::group_by(raw_file) %>% 
+#   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "all_peptides__{.col}")) %>% 
+#   dplyr::ungroup()
+
+ms_scan_median <- 
+  ms_scan %>% 
+  dplyr::select(-retention_time) %>% 
+  dplyr::group_by(raw_file) %>% 
+  dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "ms_scan__{.col}")) %>% 
+  dplyr::ungroup()
+
+msms_scan_median <- 
+  msms_scan %>% 
+  dplyr::select(-c(retention_time, elapsed_time, identified)) %>% 
+  dplyr::group_by(raw_file) %>% 
+  dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "msms_scan__{.col}")) %>% 
+  dplyr::ungroup()
+
+# msms_median <- 
+#   msms %>% 
+#   dplyr::select(-c(retention_time, mass_deviations_ppm)) %>% 
+#   dplyr::group_by(raw_file) %>% 
+#   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "msms__{.col}")) %>% 
+#   dplyr::ungroup()
+```
+
+## prepare pg
+
+```{r PG}
+protein_groups_counts <- 
+  protein_groups %>% 
+  tidyr::pivot_longer(starts_with("peptides_"), names_to = "experiment", values_to = "peptides") %>%
+  dplyr::mutate(experiment = stringr::str_remove(string = experiment, pattern = "peptides_")) %>% 
+  dplyr::mutate(experiment = stringr::str_to_upper(string = experiment)) %>% 
+  dplyr::group_by(experiment) %>% 
+  dplyr::filter(peptides > 1) %>% 
+  dplyr::count(name = "protein_counts") %>% 
+  dplyr::ungroup()
+```
+
+## marge all tables
+
+```{r merge}
+
+master_table <- 
+  summary %>% 
+  dplyr::left_join(evidence_median, by = "raw_file") %>% 
+  # dplyr::left_join(all_peptides_median, by = "raw_file") %>% 
+  dplyr::left_join(ms_scan_median, by = "raw_file") %>% 
+  dplyr::left_join(msms_scan_median, by = "raw_file") %>% 
+  # dplyr::left_join(msms_median, by = "raw_file") %>% 
+  dplyr::left_join(protein_groups_counts, by = "experiment") %>% 
+  dplyr::relocate(experiment, .after = raw_file) %>% 
+  dplyr::filter(!raw_file == "HF191128_QC_01" & !raw_file == "HF191128_QC_02" & !raw_file == "HF191128_QC_03")
+
+```
+
