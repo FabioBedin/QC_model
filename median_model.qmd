@@ -11,6 +11,7 @@ library(data.table)
 library(ggplot2)
 library(dplyr)
 library(tidymodels)
+library(explore)
 ```
 
 ## path to files
@@ -192,7 +193,6 @@ protein_groups_counts <-
 ## marge all tables
 
 ```{r merge}
-
 master_table <- 
   summary %>% 
   dplyr::left_join(evidence_median, by = "raw_file") %>% 
@@ -239,6 +239,8 @@ train <- rsample::training(splits)
 test <- rsample::testing(splits)
 ```
 
+## dara resamplig
+
 ```{r resampling}
 set.seed(123)
 
@@ -281,10 +283,11 @@ base_recipie <- recipes::recipe(performance ~ ., data = train) %>%
   recipes::step_zv(recipes::all_predictors()) %>% 
   recipes::step_nzv(recipes::all_predictors()) %>% 
   recipes::step_normalize(recipes::all_predictors()) %>% 
-  recipes::step_corr(recipes::all_numeric_predictors())
+  recipes::step_corr(recipes::all_numeric_predictors()) %>% 
+  recipes::step_lincomb(recipes::all_numeric_predictors())
 ```
 
-## bake recipes
+## bake recipes and EDA
 
 ```{r bake}
 base_recipie %>% 
@@ -294,5 +297,27 @@ base_recipie %>%
   ggplot2::ggplot(aes(x = value +1, y = feature, fill = performance)) +
   geom_boxplot() +
   scale_x_log10()
+
+base_recipie %>% 
+  prep() %>% 
+  juice() %>% 
+  dplyr::select(-c(experiment, protein_counts)) %>% 
+  explain_tree(target = performance)
+
+# base_recipie %>% 
+#   prep() %>% 
+#   juice() %>% 
+#   dplyr::select(-c(experiment, protein_counts)) %>% 
+#   explore::report(target = performance, output_dir = "C:/Users/ieo4973/Documents/QC_model")
+```
+
+## logistic reg workflow
+
+```{r log-reg-workflow}
+log_reg_wflow <- 
+  workflows::workflow() %>% 
+  workflows::add_model(log_reg) %>% 
+  workflows::add_recipe(base_recipie)
+
 ```
 
