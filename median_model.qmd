@@ -522,14 +522,13 @@ log_reg_wflow <-
   workflows::workflow() %>% 
   workflows::add_model(log_reg) %>% 
   workflows::add_recipe(base_recipie)
-
 ```
 
 ### tuning hyperparameters
 
 ```{r log-reg-tuning}
 set.seed(123)
-log_reg_grid <- dials::grid_regular(dials::penalty(), levels = 5)
+log_reg_grid <- dials::grid_regular(dials::penalty(range = c(-5, 0)), levels = 20)
 ```
 
 ### train and tune the model
@@ -543,25 +542,38 @@ log_reg_res <- log_reg_wflow %>%
     resamples =folds,
     grid = log_reg_grid,
     control = control_grid(save_pred = TRUE),
-    metrics = metric_set(roc_auc)
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity)
   )
 
 
-# log_reg_res %>% 
-#   collect_metrics()
+log_reg_res %>% collect_metrics()
 # 
 # select_best(log_reg_res)
 
-final_wf <- finalize_workflow(log_reg_wflow, select_best(log_reg_res))
+final_wf_log_reg <- finalize_workflow(log_reg_wflow, select_best(log_reg_res))
 
-final_log_reg <- last_fit(final_wf, split = splits) 
+final_log_reg <- last_fit(
+  final_wf_log_reg,
+  split = splits,
+  metrics = metric_set(roc_auc, accuracy, sensitivity, specificity)
+) 
 
-# final_log_reg %>% collect_metrics()
+final_log_reg %>% collect_metrics() 
 
 final_log_reg %>% 
   collect_predictions() %>%  
   conf_mat(performance, .pred_class) %>% 
   autoplot(type = "heatmap") 
+
+final_log_reg %>%
+  collect_predictions() %>% 
+  roc_curve(performance, c(.pred_good, .pred_warning, .pred_bad)) %>% 
+  ggplot(aes(1- specificity, sensitivity, color = .level)) +
+  geom_abline(slope = 1, color = "gray50", lty = 2, alpha = 0.8) +
+  geom_path(linewidth = 1.5, alpha = 0.7) +
+  labs(color = NULL) +
+  theme_bw() +
+  coord_fixed()
 
 ```
 
@@ -572,17 +584,11 @@ final_log_reg %>%
   extract_fit_parsnip() %>% 
   tidy() %>% 
   dplyr::mutate(estimate = exp(estimate)) %>%
-  arrange(desc(estimate))
+  dplyr::filter(!term == "Bias") %>% 
+  dplyr::mutate(term = forcats::fct_reorder(term, estimate)) %>% 
+  ggplot(aes(estimate, term)) +
+  geom_col()
 ```
-
-```{r}
-library(vip)
-
-final_log_reg %>% 
-  extract_fit_parsnip() %>% 
-  vip()
-```
-
 
 ## svm linear workflow
 
@@ -598,13 +604,12 @@ svm_lin_wflow <-
 
 ```{r svm_lin-tuning}
 set.seed(123)
-svm_lin_grid <- dials::grid_max_entropy(dials::cost(), size = 5)
+svm_lin_grid <- dials::grid_max_entropy(dials::cost(), size = 20)
 ```
 
 ### train and tune the model
 
 ```{r svm_lin-train-tune}
-
 doParallel::registerDoParallel()
 set.seed(123)
 
@@ -615,11 +620,10 @@ svm_lin_res <- svm_lin_wflow %>%
     metrics = metric_set(accuracy)
   )
 
-
-svm_lin_res %>%
-  collect_metrics()
-
-select_best(svm_lin_res)
+# svm_lin_res %>%
+#   collect_metrics()
+# 
+# select_best(svm_lin_res)
 
 svm_lin_final_wf <- finalize_workflow(svm_lin_wflow, select_best(svm_lin_res))
 
@@ -627,14 +631,17 @@ final_svm_lin <- last_fit(svm_lin_final_wf,
                           split = splits,
                           metrics = metric_set(accuracy)) 
 
-# final_log_reg %>% collect_metrics()
+final_svm_lin %>% collect_metrics()
 
 final_svm_lin %>% 
   collect_predictions() %>%  
   conf_mat(performance, .pred_class) %>% 
   autoplot(type = "heatmap") 
+```
 
+### feature importance
 
+```{r feature-importance}
 final_svm_lin %>% 
   extract_fit_parsnip() %>% 
   tidy() %>% 
@@ -644,7 +651,6 @@ final_svm_lin %>%
   ggplot(aes(estimate, term)) +
   geom_col()
 ```
-
 
 ## svm non-linear workflow
 
@@ -659,7 +665,7 @@ svm_nlin_wflow <-
 
 ```{r svm_lin-tuning}
 set.seed(123)
-svm_nlin_grid <- dials::grid_max_entropy(dials::cost(), size = 5)
+svm_nlin_grid <- dials::grid_max_entropy(dials::cost(), size = 20)
 ```
 
 ### train and tune the model
@@ -676,10 +682,9 @@ svm_nlin_res <- svm_nlin_wflow %>%
   )
 
 
-svm_nlin_res %>%
-  collect_metrics()
-
-select_best(svm_nlin_res)
+# svm_nlin_res %>% collect_metrics()
+# 
+# select_best(svm_nlin_res)
 
 svm_nlin_final_wf <- finalize_workflow(svm_nlin_wflow, select_best(svm_nlin_res))
 
@@ -687,7 +692,7 @@ final_svm_nlin <- last_fit(svm_nlin_final_wf,
                           split = splits,
                           metrics = metric_set(roc_auc, accuracy, sensitivity, specificity)) 
 
-# final_log_reg %>% collect_metrics()
+final_svm_nlin %>% collect_metrics()
 
 final_svm_nlin %>% 
   collect_predictions() %>%  
@@ -695,24 +700,38 @@ final_svm_nlin %>%
   autoplot(type = "heatmap") 
 
 
+final_svm_nlin %>%
+  collect_predictions() %>% 
+  roc_curve(performance, .pred_good:.pred_bad) %>% 
+  ggplot(aes(1- specificity, sensitivity, color = .level)) +
+  geom_abline(slope = 1, color = "gray50", lty = 2, alpha = 0.8) +
+  geom_path(linewidth = 1.5, alpha = 0.7) +
+  labs(color = NULL) +
+  theme_bw() +
+  coord_fixed()
+```
+
+### feature importance
+
+```{r}
 set.seed(123)
 
-final_svm_nlin %>% 
-  extract_workflow() %>% 
+final_svm_nlin %>%
+  extract_workflow() %>%
   pull_workflow_fit() %>%
   vi(
     method = "permute",
-    metric = "auc",  
+    metric = "auc",
     nsim = 10,
     target = "performance",
     reference_class = "good", #cosa spinge la classificazione ad essere definita good
     pred_wrapper = kernlab::predict,
     train = base_juice
   ) %>%
-  dplyr::filter(!Variable %in% c("instrument", "experiment", "ms_ms_identified_percent")) %>% 
-  # dplyr::mutate(Sign = if_else(Importance >= 0, "POS", "NEG")) %>% 
-  # dplyr::mutate(Importance = abs(Importance)) %>% 
-  dplyr::mutate(Variable = forcats::fct_reorder(Variable, Importance)) %>% 
+  dplyr::filter(!Variable %in% c("instrument", "experiment", "ms_ms_identified_percent")) %>%
+  # dplyr::mutate(Sign = if_else(Importance >= 0, "POS", "NEG")) %>%
+  # dplyr::mutate(Importance = abs(Importance)) %>%
+  dplyr::mutate(Variable = forcats::fct_reorder(Variable, Importance)) %>%
   ggplot(aes(Importance, Variable)) +
   geom_errorbar(aes(xmin = Importance- StDev, xmax = Importance + StDev)) +
   geom_col()
@@ -737,7 +756,7 @@ xgboost_grid <- dials::grid_max_entropy(dials::finalize(dials::mtry(), train),
                                         dials::min_n(),
                                         dials::tree_depth(),
                                         dials::learn_rate(),
-                                        size = 5)
+                                        size = 20)
 ```
 
 ### train and tune the model
@@ -754,10 +773,9 @@ xgboost_res <- xgboost_wflow %>%
   )
 
 
-xgboost_res %>%
-  collect_metrics()
-
-select_best(xgboost_res)
+# xgboost_res %>% collect_metrics()
+# 
+# select_best(xgboost_res)
 
 xgboost_final_wf <- finalize_workflow(xgboost_wflow, select_best(xgboost_res))
 
@@ -765,24 +783,32 @@ final_xgboost <- last_fit(xgboost_final_wf,
                           split = splits,
                           metrics = metric_set(roc_auc, accuracy, sensitivity, specificity)) 
 
-# final_log_reg %>% collect_metrics()
+final_xgboost %>% collect_metrics()
 
 final_xgboost %>% 
   collect_predictions() %>%  
   conf_mat(performance, .pred_class) %>% 
   autoplot(type = "heatmap") 
 
-final_xgboost %>% 
+final_xgboost %>%
   collect_predictions() %>% 
-  roc_curve(performance, .pred_bad:.pred_good) %>% 
-  autoplot()
+  roc_curve(performance, .pred_good:.pred_bad) %>% 
+  ggplot(aes(1- specificity, sensitivity, color = .level)) +
+  geom_abline(slope = 1, color = "gray50", lty = 2, alpha = 0.8) +
+  geom_path(linewidth = 1.5, alpha = 0.7) +
+  labs(color = NULL) +
+  theme_bw() +
+  coord_fixed()
 
+```
 
+### feature importance
+
+```{r}
 final_xgboost %>% 
   extract_fit_parsnip() %>% 
   vip()
 ```
-
 
 
 ## multi logistic reg workflow
@@ -825,7 +851,7 @@ sd_penal <- select_by_one_std_err(multi_reg_res, metric = "roc_auc", desc(penalt
 
 multi_final_wf <- finalize_workflow(multi_reg_wflow, sd_penal)
 
-final_multi <- last_fit(multi_final_wf, split = splits) 
+final_multi <- last_fit(multi_final_wf, split = splits, metrics = metric_set(roc_auc, accuracy, sensitivity, specificity)) 
 
 final_multi %>% collect_metrics()
 
@@ -836,7 +862,7 @@ final_multi %>%
 
 final_multi %>% 
   collect_predictions() %>% 
-  roc_curve(performance, .pred_bad:.pred_good) %>% 
+  roc_curve(performance, c(.pred_good, .pred_warning, .pred_bad)) %>% 
   ggplot(aes(1- specificity, sensitivity, color = .level)) +
   geom_abline(slope = 1, color = "gray50", lty = 2, alpha = 0.8) +
   geom_path(linewidth = 1.5, alpha = 0.7) +
@@ -844,7 +870,125 @@ final_multi %>%
   theme_bw() +
   coord_fixed()
 
+```
+
+### feature importance
+
+```{r}
 final_multi %>% 
   extract_fit_parsnip() %>% 
   vip()
 ```
+
+
+## workflow set
+
+```{r workflow-set}
+compare_models <- workflow_set(
+  preproc = list(
+    base = base_recipie,
+    corr = corr_recipie
+    # fs = fs_recipie
+  ),
+  models = list(
+    log_reg = log_reg,
+    multi_reg = multi_reg,
+    tree = xgboost,
+    # svm_lin = svm_lin,
+    svm_nlin = svm_nlin
+  ),
+  cross = TRUE
+)
+```
+
+## tuning all
+
+```{r tuning-all}
+doParallel::registerDoParallel()
+set.seed(123)
+
+data_frame_grid <- 
+  bind_cols(log_reg_grid, svm_lin_grid, xgboost_grid)
+
+all_models <- 
+  compare_models %>% 
+  workflow_map(
+    fn = "tune_race_anova",
+    resamples = folds,
+    grid = 20,
+    # control = control_grid(save_pred = TRUE),
+    control = control_race(save_pred = TRUE),
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
+    verbose = TRUE
+  )
+```
+
+## compare models
+
+```{r}
+autoplot(
+  all_models,
+  rank_metric = "roc_auc",
+  metric = "roc_auc",
+  select_best = TRUE
+) +
+  geom_text(aes(y = mean - 0.02, label = wflow_id),
+            angle = 90,
+            hjust = 1) +
+  lims(y = c(0.92, 1)) +
+  theme(legend.position = "none") +
+  theme_bw()
+```
+
+```{r}
+rank_results(all_models)
+```
+
+## finalizing model
+
+```{r}
+best_result <-
+  all_models %>%
+  extract_workflow_set_result("base_multi_reg") %>%
+  select_best(metric = "roc_auc")
+
+best_base_multi_reg <-
+  all_models %>%
+  extract_workflow("base_multi_reg") %>%
+  finalize_workflow(best_result) %>%
+  last_fit(split = splits)
+
+```
+
+```{r}
+
+best_base_multi_reg %>% 
+  collect_predictions() %>%  
+  conf_mat(performance, .pred_class) %>% 
+  autoplot(type = "heatmap") 
+
+best_base_multi_reg %>% collect_metrics()
+
+best_base_multi_reg %>% 
+  collect_predictions() %>% 
+  roc_curve(performance, c(.pred_good, .pred_warning, .pred_bad)) %>% 
+  ggplot(aes(1- specificity, sensitivity, color = .level)) +
+  geom_abline(slope = 1, color = "gray50", lty = 2, alpha = 0.8) +
+  geom_path(linewidth = 1.5, alpha = 0.7) +
+  labs(color = NULL) +
+  theme_bw() +
+  coord_fixed()
+
+best_base_multi_reg %>% 
+  extract_fit_parsnip() %>% 
+  vip(num_features = 15)
+
+saveRDS(best_base_multi_reg %>% extract_workflow(), file = "C:/Users/ieo4973/Documents/QC_model/best_base_multi_reg.rds")
+
+model <- readRDS(file = "C:/Users/ieo4973/Documents/QC_model/best_base_multi_reg.rds")
+
+model %>% 
+  augment(test) %>% 
+  View()
+```
+
