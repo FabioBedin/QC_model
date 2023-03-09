@@ -12,6 +12,7 @@ library(ggplot2)
 library(dplyr)
 library(tidymodels)
 library(explore)
+library(vip)
 ```
 
 ## path to files
@@ -25,49 +26,49 @@ path_files <- "X:/PublicData/QC/temporary_all_HF/QC_comb_txt_results/"
 ## load files
 
 ```{r files}
-summary <-
-  data.table::fread(input = paste0(path_files, "summary.txt")) %>% 
-  tibble::as_tibble(.name_repair = janitor::make_clean_names) %>% 
-  dplyr::select(
-    raw_file,
-    ms_ms,
-    ms_ms_submitted,
-    ms_ms_identified,
-    ms_ms_identified_percent,
-    peptide_sequences_identified,
-    peaks_sequenced_percent,
-    peaks_repeatedly_sequenced_percent
-  ) %>% 
-  dplyr::filter(!raw_file == "Total")
-
-evidence <-
-  data.table::fread(input = paste0(path_files, "evidence.txt")) %>%
-  tibble::as_tibble(.name_repair = janitor::make_clean_names) %>% 
-  dplyr::filter(!reverse == "+" & !potential_contaminant == "+") %>%
-  dplyr::select(
-    raw_file,
-    experiment,
-    charge,
-    m_z,
-    mass,
-    score,
-    uncalibrated_calibrated_m_z_ppm,
-    mass_error_ppm,
-    uncalibrated_mass_error_ppm,
-    max_intensity_m_z_0,
-    retention_time,
-    retention_length,
-    number_of_data_points,
-    number_of_scans,
-    ms_ms_count,
-    intensity
-  ) 
-
-protein_groups <-
-  data.table::fread(input = paste0(path_files, "proteinGroups.txt")) %>%
-  tibble::as_tibble(.name_repair = janitor::make_clean_names) %>%
-  dplyr::filter(!reverse == "+" & !potential_contaminant == "+" & !only_identified_by_site == "+") %>% 
-  dplyr::select(starts_with("peptides_"))
+# summary <-
+#   data.table::fread(input = paste0(path_files, "summary.txt")) %>% 
+#   tibble::as_tibble(.name_repair = janitor::make_clean_names) %>% 
+#   dplyr::select(
+#     raw_file,
+#     ms_ms,
+#     ms_ms_submitted,
+#     ms_ms_identified,
+#     ms_ms_identified_percent,
+#     peptide_sequences_identified,
+#     peaks_sequenced_percent,
+#     peaks_repeatedly_sequenced_percent
+#   ) %>% 
+#   dplyr::filter(!raw_file == "Total")
+# 
+# evidence <-
+#   data.table::fread(input = paste0(path_files, "evidence.txt")) %>%
+#   tibble::as_tibble(.name_repair = janitor::make_clean_names) %>% 
+#   dplyr::filter(!reverse == "+" & !potential_contaminant == "+") %>%
+#   dplyr::select(
+#     raw_file,
+#     experiment,
+#     charge,
+#     m_z,
+#     mass,
+#     score,
+#     uncalibrated_calibrated_m_z_ppm,
+#     mass_error_ppm,
+#     uncalibrated_mass_error_ppm,
+#     max_intensity_m_z_0,
+#     retention_time,
+#     retention_length,
+#     number_of_data_points,
+#     number_of_scans,
+#     ms_ms_count,
+#     intensity
+#   ) 
+# 
+# protein_groups <-
+#   data.table::fread(input = paste0(path_files, "proteinGroups.txt")) %>%
+#   tibble::as_tibble(.name_repair = janitor::make_clean_names) %>%
+#   dplyr::filter(!reverse == "+" & !potential_contaminant == "+" & !only_identified_by_site == "+") %>% 
+#   dplyr::select(starts_with("peptides_"))
 
 # all_peptides <-
 #   data.table::fread(input = paste0(path_files, "allPeptides.txt")) %>%
@@ -82,42 +83,42 @@ protein_groups <-
 #     # msms_isotope_indices
 #   )
 
-ms_scan <-
-  data.table::fread(input = paste0(path_files, "msScans.txt")) %>%
-  tibble::as_tibble(.name_repair = janitor::make_clean_names) %>% 
-  dplyr::select(
-    raw_file,
-    retention_time,
-    cycle_time,
-    ion_injection_time,
-    total_ion_current,
-    base_peak_intensity,
-    peak_length,
-    identified_multiplets_s,
-    ms_ms_s,
-    identified_ms_ms_s,
-    ms_ms_identification_rate_percent,
-    intens_comp_factor,
-    ctcd_comp,
-    raw_ov_ft_t,
-    agc_fill
-  ) 
-
-msms_scan <-
-  data.table::fread(input = paste0(path_files, "msmsScans.txt")) %>% 
-  tibble::as_tibble(.name_repair = janitor::make_clean_names) %>%
-  dplyr::select(
-    raw_file,
-    retention_time,
-    ion_injection_time,
-    total_ion_current,
-    collision_energy,
-    base_peak_intensity,
-    elapsed_time,
-    identified,
-    precursor_intensity,
-    score
-  ) 
+# ms_scan <-
+#   data.table::fread(input = paste0(path_files, "msScans.txt")) %>%
+#   tibble::as_tibble(.name_repair = janitor::make_clean_names) %>% 
+#   dplyr::select(
+#     raw_file,
+#     retention_time,
+#     cycle_time,
+#     ion_injection_time,
+#     total_ion_current,
+#     base_peak_intensity,
+#     peak_length,
+#     identified_multiplets_s,
+#     ms_ms_s,
+#     identified_ms_ms_s,
+#     ms_ms_identification_rate_percent,
+#     intens_comp_factor,
+#     ctcd_comp,
+#     raw_ov_ft_t,
+#     agc_fill
+#   ) 
+# 
+# msms_scan <-
+#   data.table::fread(input = paste0(path_files, "msmsScans.txt")) %>% 
+#   tibble::as_tibble(.name_repair = janitor::make_clean_names) %>%
+#   dplyr::select(
+#     raw_file,
+#     retention_time,
+#     ion_injection_time,
+#     total_ion_current,
+#     collision_energy,
+#     base_peak_intensity,
+#     elapsed_time,
+#     identified,
+#     precursor_intensity,
+#     score
+#   ) 
 
 # msms <-
 #   data.table::fread(input = paste0(path_files, "msms.txt")) %>%
@@ -138,12 +139,52 @@ msms_scan <-
 ```
 
 ```{r}
-evidence %>% 
-  dplyr::count(number_of_data_points) %>% 
-  # dplyr::filter(n > 1) %>% 
-  tidyr::drop_na() %>% 
-  ggplot(aes(number_of_data_points, log2(n))) +
-  geom_col()
+# evidence %>% 
+#   dplyr::filter(!is.na(number_of_data_points)) %>% 
+#   as.data.frame() %>% 
+#   dplyr::mutate(number_of_data_points = cut_number(number_of_data_points, 5)) %>% 
+#   ggplot(aes(retention_time, number_of_data_points)) +
+#   geom_boxplot()
+# 
+# evidence %>%
+#   # dplyr::slice_sample(n=10000) %>% 
+#   tidyr::drop_na(ms_ms_count) %>% 
+#   dplyr::group_by(raw_file) %>% 
+#   dplyr::count(ms_ms_count) %>% 
+#   dplyr::mutate(prop = n/sum(n)) %>% 
+#   dplyr::filter(charge == 2) %>% arrange(-prop) %>%
+#   dplyr::ungroup() %>% 
+#   dplyr::mutate(evidence__charge2_prop = log(n*prop)) %>% 
+#   dplyr::select(raw_file, evidence__charge2_prop)
+#   View()
+# 
+# evidence %>%
+#   # dplyr::slice_sample(n=10000) %>% 
+#   # tidyr::drop_na(number_of_scans) %>% 
+#   dplyr::group_by(raw_file) %>% 
+#   dplyr::summarise(evidence__number_of_scans = mean(number_of_scans, na.rm = TRUE)) %>% 
+#   View()
+# 
+# evidence %>%
+#   dplyr::slice_sample(n=10000) %>% 
+#   tidyr::drop_na() %>% 
+#   ggplot(aes(retention_time, number_of_scans)) +
+#   geom_point() 
+# 
+# msms_scan %>% 
+#   dplyr::slice_sample(n=1000) %>% 
+#   # tidyr::drop_na() %>%
+#   ggplot(aes(retention_time, log2(total_ion_current))) +
+#   geom_point() 
+# 
+# ms_scan %>% 
+#   dplyr::slice_sample(n=10000) %>% 
+#   # tidyr::drop_na() %>%
+#   dplyr::mutate(dplyr::across(c(total_ion_current, base_peak_intensity, raw_ov_ft_t), ~ log2(.x))) %>% 
+#   View()
+# 
+# msms_scan %>% 
+#   dplyr::slice_sample(n=1000) %>% View()
 ```
 
 
@@ -151,98 +192,157 @@ evidence %>%
 
 ```{r calculate-median}
 
-evidence_median <- 
-  evidence %>% 
-  dplyr::select(-c(charge, retention_time, number_of_data_points, number_of_scans, ms_ms_count)) %>% 
-  dplyr::group_by(raw_file, experiment) %>% 
-  dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "evidence__{.col}")) %>% 
-  dplyr::ungroup()
-
-# all_peptides_median <- 
-#   all_peptides %>% 
+# evidence_median <-
+#   evidence %>%
+#   dplyr::select(-c(
+#     charge,
+#     retention_time,
+#     ms_ms_count
+#   )) %>%
+#   dplyr::mutate(intensity = log2(intensity)) %>%
+#   dplyr::group_by(raw_file, experiment) %>%
+#   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "evidence__{.col}")) %>%
+#   dplyr::ungroup() %>%
+#   ## new feature engineering
+#   dplyr::left_join(
+#     evidence %>%
+#       tidyr::drop_na(charge) %>%
+#       dplyr::group_by(raw_file) %>%
+#       dplyr::count(charge) %>%
+#       dplyr::mutate(prop = n / sum(n)) %>%
+#       dplyr::filter(charge == 2) %>%
+#       dplyr::ungroup() %>%
+#       dplyr::mutate(evidence__charge2_prop = log(n * prop)) %>%
+#       dplyr::select(raw_file, evidence__charge2_prop),
+#     by = "raw_file"
+#   ) %>% 
+#   dplyr::left_join(
+#     evidence %>%
+#       tidyr::drop_na(ms_ms_count) %>%
+#       dplyr::group_by(raw_file) %>%
+#       dplyr::count(ms_ms_count) %>%
+#       dplyr::mutate(prop = n / sum(n)) %>%
+#       dplyr::filter(ms_ms_count == 1) %>% 
+#       dplyr::ungroup() %>%
+#       dplyr::mutate(evidence__ms_ms_count1_prop = log(n * prop)) %>%
+#       dplyr::select(raw_file, evidence__ms_ms_count1_prop),
+#     by = "raw_file"
+#   )
+# 
+# # all_peptides_median <- 
+# #   all_peptides %>% 
+# #   dplyr::group_by(raw_file) %>% 
+# #   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "all_peptides__{.col}")) %>% 
+# #   dplyr::ungroup()
+# 
+# ms_scan_median <- 
+#   ms_scan %>% 
+#   dplyr::select(-retention_time) %>% 
+#   dplyr::mutate(dplyr::across(c(total_ion_current, base_peak_intensity, raw_ov_ft_t), ~ log2(.x))) %>%
 #   dplyr::group_by(raw_file) %>% 
-#   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "all_peptides__{.col}")) %>% 
+#   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "ms_scan__{.col}")) %>% 
 #   dplyr::ungroup()
-
-ms_scan_median <- 
-  ms_scan %>% 
-  dplyr::select(-retention_time) %>% 
-  dplyr::group_by(raw_file) %>% 
-  dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "ms_scan__{.col}")) %>% 
-  dplyr::ungroup()
-
-msms_scan_median <- 
-  msms_scan %>% 
-  dplyr::select(-c(retention_time, elapsed_time, identified)) %>% 
-  dplyr::group_by(raw_file) %>% 
-  dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "msms_scan__{.col}")) %>% 
-  dplyr::ungroup()
-
-# msms_median <- 
-#   msms %>% 
-#   dplyr::select(-c(retention_time, mass_deviations_ppm)) %>% 
+# 
+# msms_scan_median <- 
+#   msms_scan %>% 
+#   dplyr::select(-c(retention_time, elapsed_time, identified)) %>% 
+#   dplyr::mutate(dplyr::across(c(total_ion_current, base_peak_intensity, precursor_intensity), ~ log2(.x))) %>%
 #   dplyr::group_by(raw_file) %>% 
-#   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "msms__{.col}")) %>% 
+#   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "msms_scan__{.col}")) %>% 
 #   dplyr::ungroup()
-```
-
-## prepare pg
-
-```{r PG}
-protein_groups_counts <- 
-  protein_groups %>% 
-  tidyr::pivot_longer(starts_with("peptides_"), names_to = "experiment", values_to = "peptides") %>%
-  dplyr::mutate(experiment = stringr::str_remove(string = experiment, pattern = "peptides_")) %>% 
-  dplyr::mutate(experiment = stringr::str_to_upper(string = experiment)) %>% 
-  dplyr::group_by(experiment) %>% 
-  dplyr::filter(peptides > 1) %>% 
-  dplyr::count(name = "protein_counts") %>% 
-  dplyr::ungroup()
+# 
+# # msms_median <- 
+# #   msms %>% 
+# #   dplyr::select(-c(retention_time, mass_deviations_ppm)) %>% 
+# #   dplyr::group_by(raw_file) %>% 
+# #   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "msms__{.col}")) %>% 
+# #   dplyr::ungroup()
+# ```
+# 
+# ## prepare pg
+# 
+# ```{r PG}
+# protein_groups_counts <- 
+#   protein_groups %>% 
+#   tidyr::pivot_longer(starts_with("peptides_"), names_to = "experiment", values_to = "peptides") %>%
+#   dplyr::mutate(experiment = stringr::str_remove(string = experiment, pattern = "peptides_")) %>% 
+#   dplyr::mutate(experiment = stringr::str_to_upper(string = experiment)) %>% 
+#   dplyr::group_by(experiment) %>% 
+#   dplyr::filter(peptides > 1) %>% 
+#   dplyr::count(name = "protein_counts") %>% 
+#   dplyr::ungroup()
 ```
 
 ## marge all tables
 
 ```{r merge}
+# master_table <- 
+#   summary %>% 
+#   dplyr::left_join(evidence_median, by = "raw_file") %>% 
+#   # dplyr::left_join(all_peptides_median, by = "raw_file") %>% 
+#   dplyr::left_join(ms_scan_median, by = "raw_file") %>% 
+#   dplyr::left_join(msms_scan_median, by = "raw_file") %>% 
+#   # dplyr::left_join(msms_median, by = "raw_file") %>% 
+#   dplyr::left_join(protein_groups_counts, by = "experiment") %>% 
+#   dplyr::relocate(experiment, .after = raw_file) %>% 
+#   dplyr::filter(!raw_file == "HF191128_QC_01" & !raw_file == "HF191128_QC_02" & !raw_file == "HF191128_QC_03") %>%
+#   # dplyr::mutate(performance = if_else(protein_counts >= 2300, "good", "bad")) %>%
+#   dplyr::mutate(performance = dplyr::case_when(ms_ms_identified_percent >= 45 ~ "good",
+#                                                ms_ms_identified_percent < 40 ~ "bad",
+#                                                TRUE ~ "warning")) %>%
+#   dplyr::filter(!is.na(performance)) %>% 
+#   dplyr::mutate(instrument = dplyr::if_else(stringr::str_detect(string = raw_file, pattern = "HF"), "hf", "qep")) %>% 
+#   dplyr::select(-raw_file) %>%
+#   dplyr::mutate(dplyr::across(dplyr::where(is.numeric), as.double)) %>% 
+#   dplyr::mutate(instrument = as.factor(instrument)) %>% 
+#   dplyr::mutate(performance = factor(performance, levels = c("bad", "warning", "good"))) %>% 
+#   dplyr::mutate(ms_ms_identified_percent = as.factor(ms_ms_identified_percent)) %>% 
+#   tidyr::drop_na() %>% 
+#   dplyr::relocate(c(instrument, ms_ms_identified_percent), .after = experiment)
+# 
+# write.table(
+#   x = master_table,
+#   file = "C:/Users/ieo4973/Documents/QC_model/master_table.txt",
+#   quote = FALSE,
+#   sep = "\t",
+#   row.names = FALSE,
+#   col.names = TRUE
+# )
+
+```
+
+
+## Reload master table
+
+```{r}
 master_table <- 
-  summary %>% 
-  dplyr::left_join(evidence_median, by = "raw_file") %>% 
-  # dplyr::left_join(all_peptides_median, by = "raw_file") %>% 
-  dplyr::left_join(ms_scan_median, by = "raw_file") %>% 
-  dplyr::left_join(msms_scan_median, by = "raw_file") %>% 
-  # dplyr::left_join(msms_median, by = "raw_file") %>% 
-  dplyr::left_join(protein_groups_counts, by = "experiment") %>% 
-  dplyr::relocate(experiment, .after = raw_file) %>% 
-  dplyr::filter(!raw_file == "HF191128_QC_01" & !raw_file == "HF191128_QC_02" & !raw_file == "HF191128_QC_03") %>%
-  # dplyr::mutate(performance = if_else(protein_counts >= 2300, "good", "bad")) %>%
-  dplyr::mutate(performance = dplyr::case_when(ms_ms_identified_percent >= 45 ~ "good",
-                                               ms_ms_identified_percent < 40 ~ "bad",
-                                               TRUE ~ "warning")) %>%
-  dplyr::filter(!is.na(performance)) %>% 
-  dplyr::mutate(instrument = dplyr::if_else(stringr::str_detect(string = raw_file, pattern = "HF"), "hf", "qep")) %>% 
-  dplyr::select(-raw_file) %>%
-  dplyr::mutate(dplyr::across(dplyr::where(is.numeric), as.double)) %>% 
+  data.table::fread(input = "C:/Users/ieo4973/Documents/QC_model/master_table.txt") %>% 
   dplyr::mutate(instrument = as.factor(instrument)) %>% 
-  dplyr::mutate(performance = factor(performance, levels = c("bad", "warning", "good"))) %>% 
+  dplyr::mutate(performance = factor(performance, levels = c("good", "warning", "bad"))) %>% 
   dplyr::mutate(ms_ms_identified_percent = as.factor(ms_ms_identified_percent)) %>% 
-  tidyr::drop_na()
-
+  dplyr::mutate(dplyr::across(dplyr::where(is.numeric), as.double))
 ```
 
-## EDA
-
-```{r eda}
-master_table %>% 
-  tidyr::pivot_longer(-c(experiment, performance, instrument), names_to = "feature", values_to = "value") %>% 
-  ggplot2::ggplot(aes(x = value +1, y = feature, fill = performance)) +
-  geom_boxplot() +
-  scale_x_log10()
-```
-
-
-## model
+## Outcome distribution
 ```{r}
 master_table %>% 
   dplyr::count(performance)
+```
+
+## EDA base
+
+```{r eda}
+master_table %>%
+  tidyr::pivot_longer(
+    -c(experiment, performance, instrument, ms_ms_identified_percent),
+    names_to = "feature",
+    values_to = "value"
+  ) %>%
+  ggplot2::ggplot(aes(x = value + 1, y = feature, fill = performance)) +
+  geom_boxplot() +
+  scale_fill_manual(values = list("good" = "darkgreen", "warning" = "orange", "bad" = "red")) +
+  scale_x_log10() +
+  theme_bw()
 ```
 
 ## data splitting e resampling
@@ -250,7 +350,7 @@ master_table %>%
 ```{r splitting}
 set.seed(123)
 
-splits <- rsample::initial_split(master_table, strata = performance)
+splits <- rsample::initial_split(master_table, prop = 0.8, strata = performance)
 
 train <- rsample::training(splits)
 
@@ -265,12 +365,129 @@ set.seed(123)
 folds <- rsample::vfold_cv(train, strata = performance)
 ```
 
+## Create the recipes
+
+```{r recipes}
+base_recipie <- recipes::recipe(performance ~ ., data = train) %>% 
+  recipes::update_role(c(experiment, ms_ms_identified_percent, instrument), new_role = "ID") %>% 
+  recipes::step_zv(recipes::all_predictors()) %>% 
+  recipes::step_normalize(recipes::all_predictors())
+
+corr_recipie <- base_recipie %>% 
+  recipes::step_corr(recipes::all_numeric_predictors())
+
+feature_sel_model <- rand_forest(mode = "classification") %>%
+    set_engine("ranger", importance = "permutation")
+
+#feature importance
+fs_recipie <- base_recipie %>% 
+  recipeselectors::step_select_vip(
+    recipes::all_predictors(),
+    outcome = "performance",
+    model = feature_sel_model,
+    top_p = 25,
+    threshold = 0.5
+  )
+
+pca_recipie <- base_recipie %>% 
+  recipes::step_pca(recipes::all_predictors(), num_comp = 10)
+```
+
+## prep recipes and EDA
+
+```{r bake}
+base_juice <- base_recipie %>% 
+  prep() %>% 
+  juice()
+
+corr_juice <- corr_recipie %>% 
+  prep() %>% 
+  juice()
+
+fs_juice <- fs_recipie %>% 
+  prep() %>% 
+  juice()
+
+pca_juice <- pca_recipie %>% 
+  prep() %>% 
+  juice()
+
+base_juice %>%
+  tidyr::pivot_longer(
+    -c(experiment, performance, ms_ms_identified_percent, instrument),
+    names_to = "feature",
+    values_to = "value"
+  ) %>% 
+  ggplot2::ggplot(aes(x = value +1, y = feature, fill = performance)) +
+  geom_boxplot() +
+  scale_fill_manual(values = list("good" = "darkgreen", "warning" = "orange", "bad" = "red")) +
+  scale_x_log10() +
+  theme_bw()
+
+## scartati dal filtro della correlazione
+corr_recipie %>%
+  prep() %>%
+  tidy(3)
+
+## scartati dal feature selection moldel
+fs_recipie %>%
+  prep() %>%
+  tidy(3)
+
+## correlation matrix
+base_juice %>% 
+  corrr::correlate() %>% 
+  corrr::shave(upper = TRUE) %>%
+  corrr::rplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+base_juice %>% 
+  corrr::correlate() %>% 
+  corrr::focus(protein_counts) %>% View()
+
+## pca
+
+p1 <- pca_juice %>% 
+  ggplot(aes(PC01, PC02, color = performance)) +
+  geom_point()+
+  scale_color_manual(values = list("good" = "darkgreen", "warning" = "orange", "bad" = "red")) +
+  theme_bw()
+
+p1
+
+p2 <- pca_recipie %>% 
+  prep() %>% 
+  tidy(3) %>% 
+  filter(component %in% paste0("PC", 1:5)) %>%
+  mutate(component = forcats::fct_inorder(component)) %>%
+  ggplot(aes(value, terms, fill = terms)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~component, nrow = 1) +
+  labs(y = NULL)
+p2
+
+patchwork::wrap_plots(p1,p2, ncol = 1)
+
+## explore
+base_juice %>% 
+  dplyr::select(-c(experiment, ms_ms_identified_percent)) %>% 
+  explore()
+```
+
+
 ## models
 
 ```{r models}
 log_reg <- parsnip::logistic_reg(
   mode = "classification",
   engine = "LiblineaR",
+  penalty = tune::tune(),
+  mixture = 1
+)
+
+multi_reg <- parsnip::multinom_reg(
+  mode = "classification",
+  engine = "glmnet",
   penalty = tune::tune(),
   mixture = 1
 )
@@ -296,104 +513,6 @@ svm_nlin <- parsnip::svm_rbf(
   engine = "kernlab",
   cost = tune::tune()
 )
-
-multi_reg <- parsnip::multinom_reg(
-  mode = "classification",
-  engine = "glmnet",
-  penalty = tune::tune(),
-  mixture = 1
-)
-```
-
-## Create the recipes
-
-```{r recipes}
-feature_sel_model <- rand_forest(mode = "classification") %>%
-    set_engine("ranger", importance = "permutation")
-
-very_base_racipie <- recipes::recipe(performance ~ ., data = train) %>% 
-  recipes::update_role(c(experiment, ms_ms_identified_percent, instrument), new_role = "ID") %>% 
-  recipes::step_zv(recipes::all_predictors()) %>% 
-  recipes::step_normalize(recipes::all_predictors())
-
-base_recipie <- recipes::recipe(performance ~ ., data = train) %>% 
-  recipes::update_role(c(experiment, ms_ms_identified_percent, instrument), new_role = "ID") %>% 
-  recipes::step_zv(recipes::all_predictors()) %>% 
-  recipes::step_normalize(recipes::all_predictors()) %>% 
-  recipes::step_corr(recipes::all_numeric_predictors()) %>%
-  # recipeselectors::step_select_vip(
-  #   recipes::all_predictors(),
-  #   outcome = "performance",
-  #   model = feature_sel_model,
-  #   top_p = 15,
-  #   threshold = 0.75
-  # )
-
-pca_recipie <- base_recipie %>% 
-  recipes::step_pca(recipes::all_predictors(), num_comp = 10)
-  # embed::step_umap(recipes::all_predictors())
-```
-
-## bake recipes and EDA
-
-```{r bake}
-vbase_juice <- very_base_racipie %>% 
-  prep() %>% 
-  juice()
-
-base_recipie %>%  prep() %>%  tidy(4)
-
-
-vbase_juice %>% 
-  corrr::correlate() %>% 
-  # corrr::network_plot(min_cor = .2)
-  corrr::shave(upper = TRUE) %>%
-  corrr::rplot() +
-  theme(axis.text.x = element_text(angle = 45, hjust=1))
-
-vbase_juice %>% 
-  corrr::correlate() %>% 
-  corrr::focus(protein_counts) %>% View()
-
-base_juice <- base_recipie %>% 
-  prep() %>% 
-  juice()
-
-pca_juice <- pca_recipie %>% 
-  prep() %>% 
-  juice()
-
-base_juice %>% 
-  tidyr::pivot_longer(-c(experiment, performance, ms_ms_identified_percent, instrument), names_to = "feature", values_to = "value") %>% 
-  ggplot2::ggplot(aes(x = value +1, y = feature, fill = performance)) +
-  geom_boxplot() +
-  scale_x_log10()
-
-base_juice %>% 
-  dplyr::select(-c(experiment, ms_ms_identified_percent)) %>% 
-  explore()
-  explain_tree(target = performance)
-
-
-pca_juice
-  ggplot(aes(PC01, PC02, color = performance)) +
-  geom_point()
-
-p2 <- pca_recipie  %>% 
-  prep() %>% 
-  tidy(6) %>% 
-  filter(component %in% paste0("PC", 1:5)) %>%
-  mutate(component = forcats::fct_inorder(component)) %>%
-  ggplot(aes(value, terms, fill = terms)) +
-  geom_col(show.legend = FALSE) +
-  facet_wrap(~component, nrow = 1) +
-  labs(y = NULL)
-
-patchwork::wrap_plots(p1,p2, ncol = 1)
-
-base_juice %>% 
-  ggplot(aes(evidence__score, performance)) +
-  geom_point()
 ```
 
 ## logistic reg workflow
