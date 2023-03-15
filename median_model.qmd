@@ -13,6 +13,7 @@ library(dplyr)
 library(tidymodels)
 library(explore)
 library(vip)
+library(dlookr)
 ```
 
 ## path to files
@@ -215,61 +216,61 @@ path_files <- "X:/PublicData/QC/temporary_all_HF/QC_comb_txt_results/"
 #       dplyr::mutate(evidence__charge2_prop = log(n * prop)) %>%
 #       dplyr::select(raw_file, evidence__charge2_prop),
 #     by = "raw_file"
-#   ) %>% 
+#   ) %>%
 #   dplyr::left_join(
 #     evidence %>%
 #       tidyr::drop_na(ms_ms_count) %>%
 #       dplyr::group_by(raw_file) %>%
 #       dplyr::count(ms_ms_count) %>%
 #       dplyr::mutate(prop = n / sum(n)) %>%
-#       dplyr::filter(ms_ms_count == 1) %>% 
+#       dplyr::filter(ms_ms_count == 1) %>%
 #       dplyr::ungroup() %>%
 #       dplyr::mutate(evidence__ms_ms_count1_prop = log(n * prop)) %>%
 #       dplyr::select(raw_file, evidence__ms_ms_count1_prop),
 #     by = "raw_file"
 #   )
 # 
-# # all_peptides_median <- 
-# #   all_peptides %>% 
-# #   dplyr::group_by(raw_file) %>% 
-# #   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "all_peptides__{.col}")) %>% 
+# # all_peptides_median <-
+# #   all_peptides %>%
+# #   dplyr::group_by(raw_file) %>%
+# #   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "all_peptides__{.col}")) %>%
 # #   dplyr::ungroup()
 # 
-# ms_scan_median <- 
-#   ms_scan %>% 
-#   dplyr::select(-retention_time) %>% 
+# ms_scan_median <-
+#   ms_scan %>%
+#   dplyr::select(-retention_time) %>%
 #   dplyr::mutate(dplyr::across(c(total_ion_current, base_peak_intensity, raw_ov_ft_t), ~ log2(.x))) %>%
-#   dplyr::group_by(raw_file) %>% 
-#   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "ms_scan__{.col}")) %>% 
+#   dplyr::group_by(raw_file) %>%
+#   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "ms_scan__{.col}")) %>%
 #   dplyr::ungroup()
 # 
-# msms_scan_median <- 
-#   msms_scan %>% 
-#   dplyr::select(-c(retention_time, elapsed_time, identified)) %>% 
+# msms_scan_median <-
+#   msms_scan %>%
+#   dplyr::select(-c(retention_time, elapsed_time, identified)) %>%
 #   dplyr::mutate(dplyr::across(c(total_ion_current, base_peak_intensity, precursor_intensity), ~ log2(.x))) %>%
-#   dplyr::group_by(raw_file) %>% 
-#   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "msms_scan__{.col}")) %>% 
+#   dplyr::group_by(raw_file) %>%
+#   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "msms_scan__{.col}")) %>%
 #   dplyr::ungroup()
 # 
-# # msms_median <- 
-# #   msms %>% 
-# #   dplyr::select(-c(retention_time, mass_deviations_ppm)) %>% 
-# #   dplyr::group_by(raw_file) %>% 
-# #   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "msms__{.col}")) %>% 
+# # msms_median <-
+# #   msms %>%
+# #   dplyr::select(-c(retention_time, mass_deviations_ppm)) %>%
+# #   dplyr::group_by(raw_file) %>%
+# #   dplyr::summarise(dplyr::across(dplyr::everything(), ~ median(.x, na.rm = TRUE), .names = "msms__{.col}")) %>%
 # #   dplyr::ungroup()
-# ```
-# 
-# ## prepare pg
-# 
-# ```{r PG}
-# protein_groups_counts <- 
-#   protein_groups %>% 
+```
+
+## prepare pg
+
+```{r PG}
+# protein_groups_counts <-
+#   protein_groups %>%
 #   tidyr::pivot_longer(starts_with("peptides_"), names_to = "experiment", values_to = "peptides") %>%
-#   dplyr::mutate(experiment = stringr::str_remove(string = experiment, pattern = "peptides_")) %>% 
-#   dplyr::mutate(experiment = stringr::str_to_upper(string = experiment)) %>% 
-#   dplyr::group_by(experiment) %>% 
-#   dplyr::filter(peptides > 1) %>% 
-#   dplyr::count(name = "protein_counts") %>% 
+#   dplyr::mutate(experiment = stringr::str_remove(string = experiment, pattern = "peptides_")) %>%
+#   dplyr::mutate(experiment = stringr::str_to_upper(string = experiment)) %>%
+#   dplyr::group_by(experiment) %>%
+#   dplyr::filter(peptides > 1) %>%
+#   dplyr::count(name = "protein_counts") %>%
 #   dplyr::ungroup()
 ```
 
@@ -343,6 +344,12 @@ master_table %>%
   scale_fill_manual(values = list("good" = "darkgreen", "warning" = "orange", "bad" = "red")) +
   scale_x_log10() +
   theme_bw()
+
+dlookr::diagnose_web_report(master_table)
+
+master_table %>% 
+dlookr::eda_web_report(target = "performance")
+#Output created: C:\Users\ieo4973\AppData\Local\Temp\RtmpWqUOb4/EDA_Report.html
 ```
 
 ## data splitting e resampling
@@ -391,6 +398,7 @@ fs_recipie <- base_recipie %>%
 
 pca_recipie <- base_recipie %>% 
   recipes::step_pca(recipes::all_predictors(), num_comp = 10)
+
 ```
 
 ## prep recipes and EDA
@@ -412,7 +420,7 @@ pca_juice <- pca_recipie %>%
   prep() %>% 
   juice()
 
-base_juice %>%
+corr_juice %>%
   tidyr::pivot_longer(
     -c(experiment, performance, ms_ms_identified_percent, instrument),
     names_to = "feature",
@@ -435,7 +443,7 @@ fs_recipie %>%
   tidy(3)
 
 ## correlation matrix
-base_juice %>% 
+corr_juice %>% 
   corrr::correlate() %>% 
   corrr::shave(upper = TRUE) %>%
   corrr::rplot() +
@@ -990,5 +998,9 @@ model <- readRDS(file = "C:/Users/ieo4973/Documents/QC_model/best_base_multi_reg
 model %>% 
   augment(test) %>% 
   View()
+
+## ms_ms_identification_rate_percent
+## protein_counts_
+## evidence_retention_length
 ```
 

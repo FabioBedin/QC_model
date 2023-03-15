@@ -1,0 +1,390 @@
+---
+title: "regression models"
+format: html
+editor: visual
+---
+
+## load libraries
+
+```{r libraries}
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(tidymodels)
+library(explore)
+library(vip)
+library(dlookr)
+```
+
+```{r}
+master_table <- 
+  data.table::fread(input = "C:/Users/ieo4973/Documents/QC_model/master_table.txt") %>% 
+  dplyr::mutate(instrument = as.factor(instrument)) %>% 
+  dplyr::mutate(dplyr::across(dplyr::where(is.numeric), as.double))
+```
+
+## EDA
+
+```{r}
+dlookr::diagnose_web_report(master_table)
+```
+
+## data splitting e resampling
+
+```{r splitting}
+set.seed(123)
+
+splits <- rsample::initial_split(master_table, prop = 0.8, strata = performance)
+
+train <- rsample::training(splits)
+
+test <- rsample::testing(splits)
+```
+
+## dara resamplig
+
+```{r resampling}
+set.seed(123)
+
+folds <- rsample::vfold_cv(train, strata = performance)
+```
+
+## Create the recipes
+
+```{r}
+base_recipie <- recipes::recipe(protein_counts ~ ., data = train) %>% 
+  recipes::update_role(c(experiment, instrument, performance), new_role = "ID") %>% 
+  recipes::step_zv(recipes::all_predictors()) %>% 
+  recipes::step_normalize(recipes::all_predictors())
+
+# base_recipie %>% 
+#   prep() %>% 
+#   juice() %>% 
+#   corrr::correlate() %>% 
+#   corrr::focus(protein_counts) %>% 
+#   View()
+
+manual_corr_rec <- base_recipie %>% 
+  recipes::step_rm(c(peptide_sequences_identified, ms_ms_identified, ms_ms_identified_percent, evidence__number_of_data_points))
+
+corr_rec <- base_recipie %>% 
+  recipes::step_corr(recipes::all_numeric_predictors(), threshold = 0.85)
+```
+
+## prep recipes and EDA
+
+```{r bake}
+base_juice <- base_recipie %>% 
+  prep() %>% 
+  juice()
+
+corr_juice <- corr_rec %>% 
+  prep() %>% 
+  juice()
+
+manual_corr_rec_juice <- manual_corr_rec %>% 
+  prep() %>% 
+  juice()
+
+
+corr_juice %>%
+  tidyr::pivot_longer(
+    -c(experiment, performance, instrument),
+    names_to = "feature",
+    values_to = "value"
+  ) %>% 
+  ggplot2::ggplot(aes(x = value +1, y = feature, fill = performance)) +
+  geom_boxplot() +
+  scale_fill_manual(values = list("good" = "darkgreen", "warning" = "orange", "bad" = "red")) +
+  scale_x_log10() +
+  theme_bw()
+
+## scartati dal filtro della correlazione
+corr_rec %>%
+  prep() %>%
+  tidy(3) %>% 
+  View()
+
+## scartati dal feature selection moldel
+fs_recipie %>%
+  prep() %>%
+  tidy(3)
+
+## correlation matrix
+corr_juice %>% 
+  corrr::correlate() %>% 
+  corrr::shave(upper = TRUE) %>%
+  corrr::rplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+
+```
+
+## models
+
+```{r}
+linear_reg_model <-
+  linear_reg(
+    mode = "regression",
+    engine = "lm"
+  )
+
+lasso_reg_model <-
+  linear_reg(
+    mode = "regression",
+    engine = "glmnet", 
+    penalty = tune::tune(), 
+    mixture = 1
+  )
+
+decision_tree_model <-
+  decision_tree(
+    mode = "regression",
+    engine = "rpart",
+    cost_complexity = tune::tune(),
+    tree_depth = tune::tune(),
+    min_n = tune::tune()
+  ) 
+```
+
+## libear regression wf
+
+```{r}
+linear_reg_wflow <- 
+  workflows::workflow() %>% 
+  workflows::add_model(linear_reg_model) %>% 
+  workflows::add_recipe(manual_corr_rec)
+```
+
+
+### train and tune the model
+
+```{r log-reg-train-tune}
+linear_reg_fit <- fit(linear_reg_wflow, data = train)
+
+linear_reg_fit %>% tidy() %>%
+  arrange(-abs(estimate)) %>% View()
+
+augment(linear_reg_fit, new_data = test) %>% 
+  dplyr::select(experiment, protein_counts, .pred) %>% 
+  ggplot(aes(x=.pred, y = protein_counts)) +
+  geom_point()
+
+```
+
+## decision_tree_model wf
+
+```{r}
+decision_tree_wflow <- 
+  workflows::workflow() %>% 
+  workflows::add_model(decision_tree_model) %>% 
+  workflows::add_recipe(corr_rec)
+```
+
+```{r}
+doParallel::registerDoParallel()
+
+set.seed(234)
+decision_tree_rs <-
+  finetune::tune_race_anova(
+    decision_tree_wflow,
+    folds,
+    grid = 20,
+    metrics = metric_set(rmse, rsq),
+    control = finetune::control_race(verbose_elim = TRUE, save_pred = TRUE)
+  )
+
+decision_tree_rs
+```
+
+```{r}
+finetune::plot_race(decision_tree_rs)
+```
+
+```{r}
+show_best(decision_tree_rs)
+```
+
+```{r}
+decision_tree_last <-
+  decision_tree_wflow %>%
+  finalize_workflow(select_best(decision_tree_rs, "rmse")) %>%
+  last_fit(splits)
+
+decision_tree_last %>% 
+  collect_predictions() %>%  
+  View()
+```
+
+## feature importance
+
+```{r}
+decision_tree_fit <- extract_fit_parsnip(decision_tree_last)
+vip(decision_tree_fit, geom = "point", num_features = 12) +
+  theme_bw()
+```
+
+```{r}
+# library(SHAPforxgboost)
+# 
+# corr_prep <- prep(corr_rec)
+# 
+# decision_tree_shap <-
+#   shap.prep(
+#     xgb_model = extract_fit_engine(decision_tree_fit),
+#     X_train = bake(corr_prep,
+#       has_role("predictor"),
+#       new_data = NULL,
+#       composition = "matrix"
+#     )
+#   )
+```
+
+## lasso reg
+
+```{r}
+lasso_reg_wflow <- 
+  workflows::workflow() %>% 
+  workflows::add_model(lasso_reg_model) %>% 
+  workflows::add_recipe(manual_corr_rec)
+```
+
+```{r}
+set.seed(123)
+lasso_reg_grid <- dials::grid_latin_hypercube(dials::penalty(), size = 50)
+```
+
+```{r}
+doParallel::registerDoParallel()
+set.seed(123)
+
+lasso_reg_res <- lasso_reg_wflow %>%
+  tune::tune_grid(
+    resamples = folds,
+    grid = lasso_reg_grid,
+    control = control_grid(save_pred = TRUE),
+    metrics = metric_set(rmse, rsq)
+  )
+
+lasso_reg_res %>% collect_metrics()
+
+lasso_reg_res %>% 
+  collect_metrics() %>%
+  ggplot(aes(penalty, mean, color = .metric)) +
+  geom_errorbar(aes(
+    ymin = mean - std_err,
+    ymax = mean + std_err
+  ),
+  alpha = 0.5
+  ) +
+  geom_line(linewidth = 1.5) +
+  facet_wrap(~.metric, scales = "free", nrow = 2) +
+  scale_x_log10() +
+  theme(legend.position = "none")
+```
+
+```{r}
+final_wf_lasso_reg <- finalize_workflow(lasso_reg_wflow, select_best(lasso_reg_res))
+
+final_lasso_reg <- last_fit(
+  final_wf_lasso_reg,
+  split = splits,
+  metrics = metric_set(rmse, rsq)
+) 
+
+final_lasso_reg %>% 
+  extract_fit_parsnip() %>% 
+  vip()
+
+final_lasso_reg %>% 
+ extract_workflow() %>% 
+  augment(test) %>% 
+  dplyr::select(experiment, protein_counts, .pred) %>% 
+  ggplot(aes(x=.pred, y = protein_counts)) +
+  geom_point()
+```
+
+## workflow set
+
+```{r workflow-set}
+compare_models <- workflow_set(
+  preproc = list(
+    base = base_recipie,
+    manual = manual_corr_rec,
+    corr = corr_rec
+  ),
+  models = list(
+    lin_reg = linear_reg_model,
+    lasso_reg = lasso_reg_model,
+    tree = decision_tree_model
+  ),
+  cross = TRUE
+)
+```
+
+## tuning all
+
+```{r tuning-all}
+doParallel::registerDoParallel()
+set.seed(123)
+
+
+all_models <- 
+  compare_models %>% 
+  workflow_map(
+    fn = "tune_race_anova",
+    resamples = folds,
+    grid = 20,
+    control = finetune::control_race(save_pred = TRUE),
+    metrics = metric_set(rmse, rsq),
+    verbose = TRUE
+  )
+```
+
+## compare models
+
+```{r}
+autoplot(
+  all_models,
+  rank_metric = "rsq",
+  metric = "rsq",
+  select_best = TRUE
+) +
+  geom_text(aes(y = mean - 0.04, label = wflow_id),
+            angle = 90,
+            hjust = 1) +
+  lims(y = c(0.8, 1)) +
+  theme(legend.position = "none") +
+  theme_bw()
+```
+
+```{r}
+rank_results(all_models)
+```
+
+## finalizing model
+
+```{r}
+best_result <-
+  all_models %>%
+  extract_workflow_set_result("base_lasso_reg") %>%
+  select_best(metric = "rsq")
+
+best_base_lasso_reg <-
+  all_models %>%
+  extract_workflow("base_lasso_reg") %>%
+  finalize_workflow(best_result) %>%
+  last_fit(split = splits)
+
+best_base_lasso_reg %>% 
+  extract_fit_parsnip() %>% 
+  vip(num_features = 15)
+
+best_base_lasso_reg %>% 
+  extract_workflow() %>% 
+  augment(test) %>%
+  dplyr::select(experiment, protein_counts, .pred) %>% 
+  ggplot(aes(x=.pred, y = protein_counts)) +
+  geom_point() +
+  geom_smooth(method="lm")
+```
